@@ -29,22 +29,23 @@ log_interval = 1
 
 # Hyperparameters
 learning_rate = 6e-4
-batch_size = 2
+batch_size = 64
 max_iters = 600000
 weight_decay = 1e-1
 beta1 = 0.9
 beta2 = 0.95
 grad_clip = 1.0
 
+model_config = LLaMAConfig.from_name("7M")
 # For shakespeare, choose smaller block size than vanilla LLaMA
-block_size = 1024
-
+model_config.block_size = 1024
+model_config.vocab_size = 100  # from prepare_shakespeare.py
 
 def main() -> None:
     auto_wrap_policy = partial(transformer_auto_wrap_policy, transformer_layer_cls={Block})
     strategy = FSDPStrategy(auto_wrap_policy=auto_wrap_policy, activation_checkpointing=Block)
 
-    fabric = L.Fabric(accelerator="cuda", devices=4, precision="bf16-mixed", strategy=strategy)
+    fabric = L.Fabric(accelerator="cuda", devices=1, precision="bf16-mixed", strategy=strategy)
     fabric.launch()
     fabric.seed_everything(1337 + fabric.global_rank)
 
@@ -53,12 +54,8 @@ def main() -> None:
 
     train_data, val_data = load_datasets()
 
-    config = LLaMAConfig.from_name("7B")
-    config.block_size = block_size
-    config.vocab_size = 100  # from prepare_shakespeare.py
-
     with fabric.device:
-        model = LLaMA(config)
+        model = LLaMA(model_config)
 
     # if compile:
     #     model = torch.compile(model)
